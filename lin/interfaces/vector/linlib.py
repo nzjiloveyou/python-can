@@ -21,7 +21,7 @@ try:
     from .exceptions import VectorLinError, VectorLinInitializationError
     NATIVE_LIN_AVAILABLE = True
 except Exception as e:
-    LOG.warning(f"Native LIN support not available: {e}")
+    LOG.debug(f"Native LIN support not available: {e}")
     NATIVE_LIN_AVAILABLE = False
 
 # Import CAN-based fallback
@@ -29,7 +29,7 @@ try:
     from .linlib_can_based import VectorLinBus as VectorLinBusCanBased
     CAN_BASED_AVAILABLE = True
 except Exception as e:
-    LOG.warning(f"CAN-based LIN support not available: {e}")
+    LOG.debug(f"CAN-based LIN support not available: {e}")
     CAN_BASED_AVAILABLE = False
 
 
@@ -48,14 +48,14 @@ class VectorLinBus(LinBusABC):
         # Try working implementation first
         try:
             from .linlib_working import VectorLinBusWorking
-            LOG.info("Using working LIN implementation")
+            LOG.debug("Using working LIN implementation")
             return VectorLinBusWorking(*args, **kwargs)
         except Exception as e:
-            LOG.warning(f"Working implementation failed: {e}")
+            LOG.debug(f"Working implementation failed: {e}")
             
         # Fallback to CAN-based implementation
         if CAN_BASED_AVAILABLE:
-            LOG.info("Using CAN-based LIN implementation")
+            LOG.debug("Using CAN-based LIN implementation")
             return VectorLinBusCanBased(*args, **kwargs)
         else:
             raise NotImplementedError("No suitable Vector LIN implementation available")

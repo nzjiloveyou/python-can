@@ -196,7 +196,7 @@ class VectorLinBusWorking(LinBusABC):
                 if WaitForSingleObject(self.event_handle.value, time_left) != 0:
                     return None
             
-            # 接收消息
+            # 接收消息 - 使用CAN的XLevent结构
             event = xlclass.XLevent()
             event_count = ctypes.c_uint(1)
             
@@ -207,26 +207,57 @@ class VectorLinBusWorking(LinBusABC):
             )
             
             if result == xldefine.XL_Status.XL_SUCCESS and event_count.value > 0:
-                # 处理LIN消息
-                # 注意：这里简化处理，实际可能需要根据event.tag判断消息类型
-                try:
-                    # 尝试作为CAN消息处理
-                    if hasattr(event.tagData, 'msg'):
-                        msg_data = event.tagData.msg
+                # 检查事件类型
+                # print(f"DEBUG: Received event with tag: {event.tag}")
+                
+                # 处理LIN消息 (标签20)
+                if event.tag == xllindefine.XL_LIN_EventTags.XL_LIN_MSG:
+                    try:
+                        # LIN数据在CAN XLevent中的布局：
+                        # 对于LIN消息，数据存储在tagData的原始字节中
+                        # 需要手动解析LIN消息结构
+                        
+                        # 获取tagData的原始字节
+                        raw_data = ctypes.cast(ctypes.byref(event.tagData), ctypes.POINTER(ctypes.c_ubyte))
+                        
+                        # LIN消息结构偏移：
+                        # id: offset 0
+                        # dlc: offset 1
+                        # flags: offset 2-3
+                        # data: offset 4-11
+                        # crc: offset 12
+                        
+                        lin_id = raw_data[0] & 0x3F  # LIN ID是6位
+                        lin_dlc = min(raw_data[1], 8)  # DLC最大8
+                        # flags = (raw_data[3] << 8) | raw_data[2]  # 16位flags
+                        
+                        # 提取数据字节
+                        data_bytes = bytes(raw_data[4:4+lin_dlc]) if lin_dlc > 0 else b''
+                        lin_crc = raw_data[12]
                         
                         msg = LinMessage(
                             timestamp=self._time_offset + event.timeStamp * 1e-9,
-                            frame_id=msg_data.id & 0x3F,  # LIN ID是6位
-                            data=bytes(msg_data.data[:msg_data.dlc]),
+                            frame_id=lin_id,
+                            data=data_bytes,
+                            checksum=lin_crc,
                             direction="Rx",
                             channel=str(self.channels[0])
                         )
                         
                         LOG.log(self.RECV_LOGGING_LEVEL, 
-                               f"Received LIN: ID=0x{msg.frame_id:02X} Data={list(msg.data)}")
+                               f"Received LIN: ID=0x{msg.frame_id:02X} Data={data_bytes.hex(' ')} Checksum=0x{lin_crc:02X}")
                         return msg
-                except Exception as e:
-                    LOG.debug(f"Error processing message: {e}")
+                    except Exception as e:
+                        LOG.debug(f"Error processing LIN message: {e}")
+                elif event.tag == xllindefine.XL_LIN_EventTags.XL_LIN_NOANS:
+                    # 无应答事件
+                    try:
+                        raw_data = ctypes.cast(ctypes.byref(event.tagData), ctypes.POINTER(ctypes.c_ubyte))
+                        no_ans_id = raw_data[0] & 0x3F
+                        LOG.debug(f"LIN no answer event for ID: 0x{no_ans_id:02X}")
+                    except:
+                        pass
+                    return None
             
             if end_time and time.time() > end_time:
                 return None
@@ -236,13 +267,35 @@ class VectorLinBusWorking(LinBusABC):
     
     def send(self, msg: LinMessage, timeout: Optional[float] = None) -> None:
         """发送LIN消息"""
-        # 创建CAN格式的事件（Vector API对LIN和CAN使用相似结构）
+        # 尝试使用原生LIN发送功能
+        try:
+            from . import xllindriver
+            if hasattr(xllindriver, 'xlLinSendRequest'):
+                # 使用原生LIN API发送请求
+                lin_id = ctypes.c_ubyte(msg.frame_id)
+                flags = ctypes.c_uint(0)
+                
+                result = xllindriver.xlLinSendRequest(
+                    self.port_handle,
+                    self.mask,
+                    lin_id,
+                    flags
+                )
+                
+                if result == xldefine.XL_Status.XL_SUCCESS:
+                    LOG.debug(f"Sent LIN request: ID=0x{msg.frame_id:02X}")
+                    return
+        except Exception as e:
+            LOG.debug(f"Native LIN send not available: {e}")
+        
+        # 如果原生LIN不可用，使用通用传输方法
+        # 创建CAN格式的事件，但填充LIN数据
         event = xlclass.XLevent()
         event.tag = xldefine.XL_EventTags.XL_TRANSMIT_MSG
         event.timeStamp = 0
-        event.channel = list(self.channel_masks.keys())[0]
+        event.chanIndex = 0
         
-        # 设置消息数据
+        # 对于LIN over CAN模式，使用CAN消息格式
         event.tagData.msg.id = msg.frame_id
         event.tagData.msg.dlc = len(msg.data)
         event.tagData.msg.flags = 0

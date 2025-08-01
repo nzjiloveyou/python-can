@@ -30,11 +30,13 @@ class XL_LIN_MessageFlags(IntFlag):
 
 # LIN event tags  
 class XL_LIN_EventTags(IntEnum):
-    XL_LIN_EV_TAG_RX_MSG = 0x101
-    XL_LIN_EV_TAG_TX_MSG = 0x102
-    XL_LIN_EV_TAG_WAKEUP = 0x103
-    XL_LIN_EV_TAG_SLEEP = 0x104
-    XL_LIN_EV_TAG_NOANS = 0x105
+    XL_LIN_MSG = 20                   # LIN消息事件
+    XL_LIN_ERRMSG = 21               # LIN错误消息
+    XL_LIN_SYNCERR = 22              # 同步错误
+    XL_LIN_NOANS = 23                # 无应答
+    XL_LIN_WAKEUP = 25               # 唤醒事件
+    XL_LIN_SLEEP = 26                # 休眠事件
+    XL_LIN_CRCINFO = 27              # CRC信息
 
 
 # LIN error codes
