@@ -1,0 +1,22 @@
+# Development dependencies
+-r requirements.txt
+
+# Testing
+pytest>=6.0
+pytest-timeout
+pytest-cov
+coverage>=5.0
+
+# Code quality
+black>=22.0
+mypy>=0.990
+ruff>=0.0.260
+
+# Documentation
+sphinx>=4.0
+sphinx-rtd-theme
+
+# Build tools
+build
+twine
+wheel

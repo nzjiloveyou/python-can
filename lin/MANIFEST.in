@@ -1,0 +1,30 @@
+# Include documentation
+include README.md
+include LICENSE
+include CHANGELOG.md
+
+# Include configuration files
+include setup.cfg
+include pyproject.toml
+include requirements*.txt
+
+# Include type information
+include py.typed
+
+# Include all Python files
+recursive-include lin *.py
+
+# Include test files
+recursive-include tests *.py
+recursive-include tests/data *
+
+# Include examples
+recursive-include examples *.py
+
+# Exclude compiled files
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude __pycache__
+global-exclude .git
+global-exclude .pytest_cache
+global-exclude .mypy_cache
